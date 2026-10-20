@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isStatus(v) {
+      return v is string && v in ['pendiente', 'en_curso', 'completado'];
+    }
+
+    function validTask(d) {
+      return d.keys().hasAll(['name', 'assignees', 'start', 'due', 'status', 'completedAt'])
+        && d.keys().hasOnly(['name', 'assignees', 'start', 'due', 'status', 'prevStatus', 'completedAt', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 160
+        && d.assignees is list && d.assignees.size() <= 10
+        && isDate(d.start)
+        && isDate(d.due)
+        && isStatus(d.status)
+        && (d.completedAt == null || isDate(d.completedAt))
+        && (!('prevStatus' in d) || d.prevStatus == null || isStatus(d.prevStatus));
+    }
+
+    match /tasks/{taskId} {
+      allow read: if true;
+      allow create, update: if validTask(request.resource.data);
+      allow delete: if true;
+    }
+
+    match /meta/app {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['seeded', 'seededAt']);
+    }
+  }
+}
